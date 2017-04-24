@@ -33,7 +33,7 @@ def RunUpdater(infile, url, port):
         firmware = None
         portnum = -1
         url = ""
-
+        conn = None
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         #
@@ -46,10 +46,10 @@ def RunUpdater(infile, url, port):
             self.sock.setblocking(True)
             self.sock.settimeout(30)  # No point in timeout if non-blocking!
             debug_print("Started CLIENT using url=%s and port=%s" % (self.url, self.portnum))
-            conn = (self.url, self.portnum)
+            self.conn = (self.url, self.portnum)
             try:
-                #self.sock.bind(conn)
-                self.sock.connect(conn)
+                self.sock.bind(self.conn)
+                #self.sock.connect(conn)
                 debug_print("Client on port=%s: connected!" % self.portnum)
             except socket.error as err:
                 debug_print("Client on port=%s:: Socket connect ERROR! Msg: %s" % (self.portnum, err.strerror))
@@ -72,7 +72,8 @@ def RunUpdater(infile, url, port):
             size = 0
             try:
                 tmp = Encrypt(data)
-                self.sock.sendall(tmp)  # Or use 'sock.sendto()'
+                #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
+                self.sock.sendto(tmp, self.conn)
                 size = len(data)
             except socket.error as err:
                 debug_print("Client on port=%s: socket SEND error!Msg=%s" % (self.portnum, err.strerror))

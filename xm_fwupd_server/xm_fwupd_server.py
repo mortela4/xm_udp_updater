@@ -26,9 +26,10 @@ def Decrypt(data):
 
 
 def GenerateFirmwareFile(fname):
+    NUM_LINES = 1
     TEST_LINE = "Dette er en test - ABCDEFGHabcdefgh. No:"
     fh = open(fname, mode='w')
-    for i in range(100):
+    for i in range(NUM_LINES):
         line = TEST_LINE + str(i) + "\n"
         fh.write(line)
     fh.close()
@@ -41,6 +42,8 @@ def RunFWserver(outfile, srv_url, port):
         firmware = None
         portnum = -1
         url = ""
+        conn = None
+        addr = None
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         #
@@ -52,14 +55,14 @@ def RunFWserver(outfile, srv_url, port):
             """ Establish UDP comm """
             self.sock.setblocking(True)
             self.sock.settimeout(10)  # No point in timeout if non-blocking!
-            debug_print("Started SERVER on url=%s and port=%s" % (self.url, self.portnum))
-            conn = ("localhost", self.portnum)
+            debug_print("Starting SERVER on url=%s and port=%s" % (self.url, self.portnum))
+            self.conn = ("localhost", self.portnum)
             try:
-                self.sock.bind(conn)
-                self.sock.connect(conn)
-                debug_print("Server on port=%s: connected!" % self.portnum)
-            except socket.error:
-                debug_print("Server on port=%s:: Socket connect ERROR!" % self.portnum)
+                self.sock.bind(self.conn)
+                #self.sock.connect(self.conn)
+                debug_print("Server on port=%s: running!" % self.portnum)
+            except socket.error as err:
+                debug_print("Server on port=%s:: Socket connect ERROR!" % (self.portnum, err.strerror))
         #
         def XMGet(self, size, timeout=10):
             """ Only used for handshake - not data ... """
@@ -67,7 +70,10 @@ def RunFWserver(outfile, srv_url, port):
             data = None
             try:
                 #tmp = self.sock.recv(size)  # Or use 'sock.recvfrom()'
-                tmp = self.sock.recvfrom(size)
+                tmp, addr = self.sock.recvfrom(size)
+                if self.addr == None:
+                    print("SRV: client connected!")
+                    self.addr = addr
                 data = Decrypt(tmp)
                 debug_print("SRV: received data: " + repr(data))
             except socket.error as err:
@@ -80,7 +86,8 @@ def RunFWserver(outfile, srv_url, port):
             size = 0
             try:
                 tmp = Encrypt(data)
-                self.sock.sendall(tmp)  # Or use 'sock.sendto()'
+                #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
+                self.sock.sendto(tmp, self.conn)
                 size = len(data)
                 debug_print("SRV: sent data: " + repr(data))
             except socket.error as err:
