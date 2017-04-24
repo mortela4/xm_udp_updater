@@ -6,8 +6,9 @@ import multiprocessing
 import xmodem
 import time
 
-UPDATE_PORT_START = 11111
+UPDATE_PORT_START = 11110
 DEBUG_ON = True
+MAX_PAYLOAD_SZ = 1500
 
 
 # utils
@@ -36,6 +37,7 @@ def RunUpdater(infile, url, port):
         conn = None
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        default_size = sock.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
         #
         def __init__(self, url, portnum):
             self.url = url
@@ -43,6 +45,9 @@ def RunUpdater(infile, url, port):
         #
         def Connect(self):
             """ Establish UDP comm """
+            self.sock.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF, MAX_PAYLOAD_SZ)
+            print("Max payload was %s bytes - now set to %s!" % (self.default_size, MAX_PAYLOAD_SZ))
+            #
             self.sock.setblocking(True)
             self.sock.settimeout(30)  # No point in timeout if non-blocking!
             debug_print("Started CLIENT using url=%s and port=%s" % (self.url, self.portnum))
@@ -56,12 +61,14 @@ def RunUpdater(infile, url, port):
         #
         def XMGet(self, size, timeout=10):
             """ TODO: emulate SRec-parser and Flash-procedure! """
+            print("CLIENT: request for %s bytes to be received..." % size)
             self.sock.settimeout(timeout)
             data = None
             try:
                 #tmp = self.sock.recv(size)  # Or - use 'socket.recvfrom()'
-                tmp = self.sock.recvfrom(size)
+                tmp, addr = self.sock.recvfrom(size)
                 data = Decrypt(tmp)
+                debug_print("CLIENT: received %s bytes of data: %s" % (len(tmp), repr(data)))
             except socket.error as err:
                 debug_print("Client on port=%s: Socket RECEIVE error! Msg=%s" % (self.portnum, err.strerror))
             return data
@@ -72,16 +79,17 @@ def RunUpdater(infile, url, port):
             size = 0
             try:
                 tmp = Encrypt(data)
+                size = len(data)
+                print("CLIENT: request for %s bytes to be sent..." % size)
                 #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
                 self.sock.sendto(tmp, self.conn)
-                size = len(data)
             except socket.error as err:
                 debug_print("Client on port=%s: socket SEND error!Msg=%s" % (self.portnum, err.strerror))
             return size
         #
         def XMRunUpdate(self, filename):
             self.Connect()
-            stream = open(__file__, 'wb')
+            stream = open(filename, 'wb')
             xm = xmodem.XMODEM(self.XMGet, self.XMput)
             size = xm.recv(stream, crc_mode=1, retry=16, timeout=60, delay=1, quiet=0)
             if size:

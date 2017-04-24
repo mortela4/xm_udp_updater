@@ -5,8 +5,9 @@ import multiprocessing
 import xmodem
 import time
 
-UPDATE_PORT_START = 11111
+UPDATE_PORT_START = 11110
 DEBUG_ON = True
+MAX_PAYLOAD_SZ = 1500
 
 
 # utils
@@ -45,7 +46,8 @@ def RunFWserver(outfile, srv_url, port):
         conn = None
         addr = None
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  
+        default_size = sock.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
         #
         def __init__(self, url, portnum):
             self.url = url
@@ -53,6 +55,8 @@ def RunFWserver(outfile, srv_url, port):
         #
         def Connect(self):
             """ Establish UDP comm """
+            self.sock.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF, MAX_PAYLOAD_SZ)
+            print("Max payload was %s bytes - now set to %s!" % (self.default_size, MAX_PAYLOAD_SZ))
             self.sock.setblocking(True)
             self.sock.settimeout(10)  # No point in timeout if non-blocking!
             debug_print("Starting SERVER on url=%s and port=%s" % (self.url, self.portnum))
@@ -68,14 +72,15 @@ def RunFWserver(outfile, srv_url, port):
             """ Only used for handshake - not data ... """
             self.sock.settimeout(timeout)
             data = None
+            print("SRV: request for %s bytes to be received..." % size)
             try:
                 #tmp = self.sock.recv(size)  # Or use 'sock.recvfrom()'
                 tmp, addr = self.sock.recvfrom(size)
                 if self.addr == None:
-                    print("SRV: client connected!")
+                    print("SRV: client connected to from address=%s!" % repr(addr))
                     self.addr = addr
                 data = Decrypt(tmp)
-                debug_print("SRV: received data: " + repr(data))
+                debug_print("SRV: received %s bytes of data: %s" % (len(tmp), repr(data)))
             except socket.error as err:
                 debug_print("SRV on port=%s: Socket RECEIVE error! Msg=%s" % (self.portnum, err.strerror))
             return data
@@ -86,9 +91,10 @@ def RunFWserver(outfile, srv_url, port):
             size = 0
             try:
                 tmp = Encrypt(data)
+                size = len(data)
+                print("SRV: request for %s bytes to be sent..." % size)
                 #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
                 self.sock.sendto(tmp, self.conn)
-                size = len(data)
                 debug_print("SRV: sent data: " + repr(data))
             except socket.error as err:
                 debug_print("SRV on port=%s: socket SEND error! Msg=%s" % (self.portnum, err.strerror))
@@ -96,7 +102,7 @@ def RunFWserver(outfile, srv_url, port):
         #
         def XMServeUpdate(self, filename):
             self.Connect()
-            stream = open(__file__, 'rb')
+            stream = open(filename, 'rb')
             xm = xmodem.XMODEM(self.XMGet, self.XMput)
             # TODO: possibly infer a callback? (for debug-purpose f.ex.)
             status = xm.send(stream)
