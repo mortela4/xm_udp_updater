@@ -4,6 +4,8 @@ import socket
 import multiprocessing
 import xmodem
 import time
+import queue
+
 
 UPDATE_PORT_START = 11110
 DEBUG_ON = True
@@ -63,7 +65,6 @@ def RunFWserver(outfile, srv_url, port):
             self.conn = ("localhost", self.portnum)
             try:
                 self.sock.bind(self.conn)
-                #self.sock.connect(self.conn)
                 debug_print("Server on port=%s: running!" % self.portnum)
             except socket.error as err:
                 debug_print("Server on port=%s:: Socket connect ERROR!" % (self.portnum, err.strerror))
@@ -74,28 +75,33 @@ def RunFWserver(outfile, srv_url, port):
             data = None
             print("SRV: request for %s bytes to be received..." % size)
             try:
-                #tmp = self.sock.recv(size)  # Or use 'sock.recvfrom()'
+                #tmp, addr = self.sock.recvfrom(MAX_PAYLOAD_SZ)
                 tmp, addr = self.sock.recvfrom(size)
                 if self.addr == None:
                     print("SRV: client connected to from address=%s!" % repr(addr))
                     self.addr = addr
-                data = Decrypt(tmp)
+                #data = Decrypt(tmp)
+                data = tmp
                 debug_print("SRV: received %s bytes of data: %s" % (len(tmp), repr(data)))
             except socket.error as err:
                 debug_print("SRV on port=%s: Socket RECEIVE error! Msg=%s" % (self.portnum, err.strerror))
-            return data
+            return data[:size]
         #
         def XMput(self, data, timeout=10):
             """ TODO: emulate SRec-parser and read one Srec-frame at a time """
             self.sock.settimeout(timeout)
             size = 0
             try:
-                tmp = Encrypt(data)
-                size = len(data)
-                print("SRV: request for %s bytes to be sent..." % size)
+                #tmp = Encrypt(data)
+                tmp = data
+                print("SRV: request for %s bytes to be sent..." % len(data))
                 #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
-                self.sock.sendto(tmp, self.conn)
-                debug_print("SRV: sent data: " + repr(data))
+                if self.addr:
+                    self.sock.sendto(tmp, self.addr)
+                    debug_print("SRV: sent data: " + repr(data))
+                    size = len(data)
+                else:
+                    debug_print("SERVER ERROR: no client address set yet! Dummy-send ...")
             except socket.error as err:
                 debug_print("SRV on port=%s: socket SEND error! Msg=%s" % (self.portnum, err.strerror))
             return size

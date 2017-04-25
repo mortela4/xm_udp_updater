@@ -38,6 +38,7 @@ def RunUpdater(infile, url, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         default_size = sock.getsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF)
+        sfh = sock.makefile(mode='rb')
         #
         def __init__(self, url, portnum):
             self.url = url
@@ -50,14 +51,8 @@ def RunUpdater(infile, url, port):
             #
             self.sock.setblocking(True)
             self.sock.settimeout(30)  # No point in timeout if non-blocking!
-            debug_print("Started CLIENT using url=%s and port=%s" % (self.url, self.portnum))
+            debug_print("Started CLIENT using SERVER url=%s and port=%s" % (self.url, self.portnum))
             self.conn = (self.url, self.portnum)
-            try:
-                self.sock.bind(self.conn)
-                #self.sock.connect(conn)
-                debug_print("Client on port=%s: connected!" % self.portnum)
-            except socket.error as err:
-                debug_print("Client on port=%s:: Socket connect ERROR! Msg: %s" % (self.portnum, err.strerror))
         #
         def XMGet(self, size, timeout=10):
             """ TODO: emulate SRec-parser and Flash-procedure! """
@@ -65,9 +60,12 @@ def RunUpdater(infile, url, port):
             self.sock.settimeout(timeout)
             data = None
             try:
-                #tmp = self.sock.recv(size)  # Or - use 'socket.recvfrom()'
-                tmp, addr = self.sock.recvfrom(size)
-                data = Decrypt(tmp)
+                #tmp, addr = self.sock.recvfrom(size)
+                #tmp = self.sock.recv(size)
+                #tmp = self.sock.recv()
+                tmp = self.sfh.read(size)
+                #data = Decrypt(tmp)
+                data = tmp
                 debug_print("CLIENT: received %s bytes of data: %s" % (len(tmp), repr(data)))
             except socket.error as err:
                 debug_print("Client on port=%s: Socket RECEIVE error! Msg=%s" % (self.portnum, err.strerror))
@@ -83,8 +81,9 @@ def RunUpdater(infile, url, port):
                 print("CLIENT: request for %s bytes to be sent..." % size)
                 #self.sock.sendall(tmp)  # Or use 'sock.sendto()'
                 self.sock.sendto(tmp, self.conn)
+                print("CLIENT: bytes sent: %s" % repr(data))                
             except socket.error as err:
-                debug_print("Client on port=%s: socket SEND error!Msg=%s" % (self.portnum, err.strerror))
+                debug_print("Client sending to SERVER-port=%s: socket SEND error!Msg=%s" % (self.portnum, err.strerror))
             return size
         #
         def XMRunUpdate(self, filename):
@@ -98,6 +97,7 @@ def RunUpdater(infile, url, port):
                 debug_print("CLIENT ERROR: got no data from server!")
             stream.close()
             # Class instance will be disposed after use - might as well close socket here:
+            self.sfh.close()
             self.sock.close()
             # Verify (but only if firmware BIN-fil has been received):
             # self.XMVerify(filename)
