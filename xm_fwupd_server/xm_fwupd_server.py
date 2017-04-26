@@ -10,7 +10,7 @@ import queue
 UPDATE_PORT_START = 11110
 DEBUG_ON = True
 MAX_PAYLOAD_SZ = 1500
-
+GENERATED_DATA = False
 
 # utils
 def debug_print(msg):
@@ -29,7 +29,7 @@ def Decrypt(data):
 
 
 def GenerateFirmwareFile(fname):
-    NUM_LINES = 1
+    NUM_LINES = 100
     TEST_LINE = "Dette er en test - ABCDEFGHabcdefgh. No:"
     fh = open(fname, mode='w')
     for i in range(NUM_LINES):
@@ -85,12 +85,12 @@ def RunFWserver(outfile, srv_url, port):
                 debug_print("SRV: received %s bytes of data: %s" % (len(tmp), repr(data)))
             except socket.error as err:
                 debug_print("SRV on port=%s: Socket RECEIVE error! Msg=%s" % (self.portnum, err.strerror))
-            return data[:size]
+            return data
         #
         def XMput(self, data, timeout=10):
             """ TODO: emulate SRec-parser and read one Srec-frame at a time """
             self.sock.settimeout(timeout)
-            size = 0
+            size = 0    # =None?
             try:
                 #tmp = Encrypt(data)
                 tmp = data
@@ -108,7 +108,14 @@ def RunFWserver(outfile, srv_url, port):
         #
         def XMServeUpdate(self, filename):
             self.Connect()
-            stream = open(filename, 'rb')
+            stream = None
+            try:
+                stream = open(filename, 'rb')
+            except OSError as err:
+                print("ERROR: Failed to open file! Reason: " + err.strerror)
+                self.sock.close()
+                return
+            #
             xm = xmodem.XMODEM(self.XMGet, self.XMput)
             # TODO: possibly infer a callback? (for debug-purpose f.ex.)
             status = xm.send(stream)
@@ -131,9 +138,11 @@ if __name__ == '__main__':
     url = "localhost"
     num_servers = 1  # = number of clients
     fwserver = None
-
-    out_file = "OUT_fw_1.dat"  # Actually .BIN-files
-    GenerateFirmwareFile(out_file)
+    if GENERATED_DATA:
+        out_file = "OUT_fw_1.dat"  # Actually .BIN-files
+        GenerateFirmwareFile(out_file)
+    else:
+        out_file = "S19_test_file_16bit_address.s19.txt"
     RunFWserver(out_file, url, UPDATE_PORT_START)
 
 """
