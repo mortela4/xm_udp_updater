@@ -5,6 +5,8 @@ import socket
 import multiprocessing
 import xmodem
 import time
+#
+#import verify_firmware
 
 UPDATE_PORT_START = 11110
 DEBUG_ON = True
